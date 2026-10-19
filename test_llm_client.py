@@ -4,6 +4,15 @@ from types import SimpleNamespace
 
 import logging
 
+import httpx
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    AuthenticationError,
+    InternalServerError,
+    RateLimitError,
+)
+
 def manual_test():
     """手动调用真实 API，检查模型是否能正常回答。"""
     messages = [
@@ -23,7 +32,6 @@ def manual_test():
         print("\n测试成功：已获取完整回答。")
     else:
         print("\n测试失败：没有获取到回答。")
-
 
 def test_stream_answer_returns_none_when_api_fails(
     monkeypatch,
@@ -61,6 +69,171 @@ def test_stream_answer_returns_none_when_api_fails(
     assert "模拟 API 故障" in captured.out
     assert "模型调用失败" in caplog.text
 
+def test_stream_answer_handles_timeout(monkeypatch, capsys, caplog):
+    """模拟 API 请求超时，验证异常处理逻辑。"""
+
+    def fake_create(**kwargs):
+        raise APITimeoutError(
+            request=httpx.Request(
+                "POST",
+                "https://api.siliconflow.cn/v1/chat/completions",
+            )
+        )
+
+    monkeypatch.setattr(
+        llm_client.client.chat.completions,
+        "create",
+        fake_create,
+    )
+
+    answer = llm_client.stream_answer(
+        [{"role": "user", "content": "测试超时"}]
+    )
+
+    captured = capsys.readouterr()
+
+    assert answer is None
+    assert "模型请求超时" in captured.out
+    assert "模型请求超时" in caplog.text
+
+def test_stream_answer_handles_connection_error(
+    monkeypatch,
+    capsys,
+    caplog,
+):
+    """模拟网络连接失败，验证异常处理逻辑。"""
+
+    def fake_create(**kwargs):
+        raise APIConnectionError(
+            request=httpx.Request(
+                "POST",
+                "https://api.siliconflow.cn/v1/chat/completions",
+            )
+        )
+
+    monkeypatch.setattr(
+        llm_client.client.chat.completions,
+        "create",
+        fake_create,
+    )
+
+    answer = llm_client.stream_answer(
+        [{"role": "user", "content": "测试网络错误"}]
+    )
+
+    captured = capsys.readouterr()
+
+    assert answer is None
+    assert "模型网络连接失败" in captured.out
+    assert "模型网络连接失败" in caplog.text
+
+def test_stream_answer_handles_authentication_error(
+    monkeypatch,
+    capsys,
+    caplog,
+):
+    """模拟 API 认证失败，验证异常处理逻辑。"""
+
+    def fake_create(**kwargs):
+        raise AuthenticationError(
+            message="模拟认证失败",
+            response=httpx.Response(
+                401,
+                request=httpx.Request(
+                    "POST",
+                    "https://api.siliconflow.cn/v1/chat/completions",
+                ),
+            ),
+            body=None,
+        )
+
+    monkeypatch.setattr(
+        llm_client.client.chat.completions,
+        "create",
+        fake_create,
+    )
+
+    answer = llm_client.stream_answer(
+        [{"role": "user", "content": "测试认证错误"}]
+    )
+
+    captured = capsys.readouterr()
+
+    assert answer is None
+    assert "API 认证失败" in captured.out
+    assert "API 认证失败" in caplog.text
+
+def test_stream_answer_handles_rate_limit_error(
+    monkeypatch,
+    capsys,
+    caplog,
+):
+    """模拟 API 请求频率或额度限制。"""
+
+    def fake_create(**kwargs):
+        raise RateLimitError(
+            message="模拟请求频率限制",
+            response=httpx.Response(
+                429,
+                request=httpx.Request(
+                    "POST",
+                    "https://api.siliconflow.cn/v1/chat/completions",
+                ),
+            ),
+            body=None,
+        )
+
+    monkeypatch.setattr(
+        llm_client.client.chat.completions,
+        "create",
+        fake_create,
+    )
+
+    answer = llm_client.stream_answer(
+        [{"role": "user", "content": "测试请求频率限制"}]
+    )
+
+    captured = capsys.readouterr()
+
+    assert answer is None
+    assert "API 请求频率或额度限制" in captured.out
+    assert "API 请求频率或额度限制" in caplog.text
+
+def test_stream_answer_handles_internal_server_error(
+    monkeypatch,
+    capsys,
+    caplog,
+):
+    """模拟 API 服务端发生错误。"""
+
+    def fake_create(**kwargs):
+        raise InternalServerError(
+            message="模拟服务端错误",
+            response=httpx.Response(
+                500,
+                request=httpx.Request(
+                    "POST",
+                    "https://api.siliconflow.cn/v1/chat/completions",
+                ),
+            ),
+            body=None,
+        )
+
+    monkeypatch.setattr(
+        llm_client.client.chat.completions,
+        "create",
+        fake_create,
+    )
+
+    answer = llm_client.stream_answer(
+        [{"role": "user", "content": "测试服务端错误"}]
+    )
+
+    captured = capsys.readouterr()
+
+    assert answer is None
+    assert "API 服务端发生错误" in captured.out
+    assert "API 服务端发生错误" in caplog.text
 
 def test_stream_answer_joins_stream_chunks(monkeypatch, capsys, caplog):
     chunks = [
@@ -112,11 +285,6 @@ def test_stream_answer_joins_stream_chunks(monkeypatch, capsys, caplog):
 
     capsys.readouterr()
 
-
-if __name__ == "__main__":
-    manual_test()
-
-
 def test_stream_answer_records_token_usage(monkeypatch, capsys):
     usage = SimpleNamespace(
         prompt_tokens=10,
@@ -166,7 +334,6 @@ def test_stream_answer_records_token_usage(monkeypatch, capsys):
     assert recorded_usages == [usage]
     capsys.readouterr()
 
-
 def test_stream_answer_without_usage(monkeypatch, capsys, caplog):
     chunks = [
         SimpleNamespace(
@@ -206,3 +373,59 @@ def test_stream_answer_without_usage(monkeypatch, capsys, caplog):
     assert answer == "正常回答"
     assert "本次请求没有返回 Token 用量统计" in captured.out
     assert "本次请求没有返回 Token 用量统计" in caplog.text
+
+def test_client_has_one_retry():
+    """确认模型客户端最多额外重试一次。"""
+    assert llm_client.client.max_retries == 1
+
+def test_sdk_retries_rate_limit_once():
+    """验证 SDK 遇到 HTTP 429 时只额外重试一次。"""
+    import httpx2
+    from openai import OpenAI, RateLimitError
+
+    request_count = 0
+
+    def mock_handler(request):
+        nonlocal request_count
+        request_count += 1
+
+        return httpx2.Response(
+            status_code=429,
+            json={
+                "error": {
+                    "message": "Rate limit test",
+                    "type": "rate_limit_error",
+                }
+            },
+        )
+
+    transport = httpx2.MockTransport(mock_handler)
+    http_client = httpx2.Client(transport=transport)
+
+    client = OpenAI(
+        api_key="test-key",
+        base_url="https://example.com/v1",
+        http_client=http_client,
+        max_retries=1,
+    )
+
+    try:
+        try:
+            client.chat.completions.create(
+                model="test-model",
+                messages=[{"role": "user", "content": "test"}],
+            )
+        except RateLimitError:
+            pass
+        else:
+            raise AssertionError("预期 SDK 抛出 RateLimitError")
+
+        assert request_count == 2, (
+            f"预期请求 2 次，实际请求 {request_count} 次"
+        )
+    finally:
+        client.close()
+        http_client.close()
+
+if __name__ == "__main__":
+    manual_test()

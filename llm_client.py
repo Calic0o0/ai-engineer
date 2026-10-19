@@ -1,5 +1,12 @@
 
-from openai import OpenAI
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    AuthenticationError,
+    InternalServerError,
+    OpenAI,
+    RateLimitError,
+)
 
 import config
 import usage_tracker
@@ -57,7 +64,38 @@ def stream_answer(messages):
 
         return "".join(answer_parts)
 
+    except APITimeoutError as error:
+        logger.exception("模型请求超时")
+        print(f"\n模型请求超时：{error}")
+        return None
+
+    except AuthenticationError as error:
+        logger.exception("API 认证失败，请检查 API Key")
+        print(f"\nAPI 认证失败，请检查 API Key：{error}")
+        return None
+
+    except APIConnectionError as error:
+        logger.exception("模型网络连接失败")
+        print(f"\n模型网络连接失败：{error}")
+        return None
+
+    except AuthenticationError as error:
+        logger.exception("API 认证失败，请检查 API Key")
+        print(f"\nAPI 认证失败，请检查 API Key：{error}")
+        return None
+
+    except RateLimitError as error:
+        logger.exception("API 请求频率或额度限制")
+        print(f"\nAPI 请求频率或额度限制：{error}")
+        return None
+
+    except InternalServerError as error:
+        logger.exception("API 服务端发生错误")
+        print(f"\nAPI 服务端发生错误：{error}")
+        return None
+
     except Exception as error:
         logger.exception("模型调用失败")
         print(f"\n模型调用失败：{error}")
         return None
+    
