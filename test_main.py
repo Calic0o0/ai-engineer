@@ -100,3 +100,77 @@ def test_ask_ai_saves_question_and_answer(monkeypatch):
         "role": "assistant",
         "content": "这是模拟的 AI 回答",
     }
+
+
+def test_main_exits_and_prints_usage_summary(monkeypatch, capsys):
+    import main
+
+    inputs = iter(["exit"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(inputs))
+
+    summary_called = []
+    monkeypatch.setattr(
+        main.usage_tracker,
+        "print_usage_summary",
+        lambda: summary_called.append(True),
+    )
+
+    main.main()
+
+    captured = capsys.readouterr()
+
+    assert summary_called == [True]
+    assert "AI" in captured.out
+    assert "exit" in captured.out.lower()
+
+
+def test_main_reprompts_when_input_is_empty(monkeypatch, capsys):
+    import main
+
+    inputs = iter(["", "exit"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(inputs))
+
+    monkeypatch.setattr(
+        main.usage_tracker,
+        "print_usage_summary",
+        lambda: None,
+    )
+
+    def unexpected_ask_ai(question):
+        raise AssertionError("空输入不应该调用 ask_ai")
+
+    monkeypatch.setattr(main, "ask_ai", unexpected_ask_ai)
+
+    main.main()
+
+    captured = capsys.readouterr()
+
+    assert "exit" in captured.out.lower()
+    assert "问题" in captured.out or "输入" in captured.out
+
+
+def test_main_handles_keyboard_interrupt(monkeypatch, capsys):
+    import main
+
+    def raise_keyboard_interrupt(prompt=""):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(
+        "builtins.input",
+        raise_keyboard_interrupt,
+    )
+
+    summary_called = []
+    monkeypatch.setattr(
+        main.usage_tracker,
+        "print_usage_summary",
+        lambda: summary_called.append(True),
+    )
+
+    main.main()
+
+    captured = capsys.readouterr()
+
+    assert "KeyboardInterrupt" not in captured.out
+    assert summary_called == [True]
+    assert "AI" in captured.out
