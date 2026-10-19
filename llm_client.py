@@ -79,11 +79,6 @@ def stream_answer(messages):
         print(f"\n模型网络连接失败：{error}")
         return None
 
-    except AuthenticationError as error:
-        logger.exception("API 认证失败，请检查 API Key")
-        print(f"\nAPI 认证失败，请检查 API Key：{error}")
-        return None
-
     except RateLimitError as error:
         logger.exception("API 请求频率或额度限制")
         print(f"\nAPI 请求频率或额度限制：{error}")

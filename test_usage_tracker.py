@@ -1,8 +1,8 @@
 
 import json
-
 import usage_tracker
-
+from types import SimpleNamespace
+import pytest
 
 def test_load_usage_returns_defaults_when_file_missing(
     monkeypatch,
@@ -18,7 +18,6 @@ def test_load_usage_returns_defaults_when_file_missing(
         "total_completion_tokens": 0,
         "total_tokens": 0,
     }
-
 
 def test_load_usage_reads_valid_file(monkeypatch, tmp_path):
     usage_file = tmp_path / "token_usage.json"
@@ -36,10 +35,6 @@ def test_load_usage_reads_valid_file(monkeypatch, tmp_path):
     result = usage_tracker.load_usage()
 
     assert result == expected
-
-
-from types import SimpleNamespace
-
 
 def test_record_usage_accumulates_and_saves(
     monkeypatch,
@@ -85,7 +80,6 @@ def test_record_usage_accumulates_and_saves(
 
     capsys.readouterr()
 
-
 def test_load_usage_handles_invalid_json(
     monkeypatch,
     tmp_path,
@@ -111,10 +105,6 @@ def test_load_usage_handles_invalid_json(
     captured = capsys.readouterr()
     assert "读取历史统计失败" in captured.out
     assert "历史用量暂时按零处理" in captured.out
-
-
-import pytest
-
 
 @pytest.mark.parametrize(
     "invalid_value",
@@ -152,7 +142,6 @@ def test_load_usage_handles_invalid_values(
     captured = capsys.readouterr()
     assert "读取历史统计失败" in captured.out
 
-
 def test_record_usage_handles_save_error(
     monkeypatch,
     capsys,
@@ -188,3 +177,41 @@ def test_record_usage_handles_save_error(
     captured = capsys.readouterr()
     assert "保存历史统计失败" in captured.out
     assert "模拟文件写入失败" in captured.out
+
+def test_print_usage_summary(capsys, monkeypatch):
+    monkeypatch.setattr(
+        usage_tracker,
+        "total_prompt_tokens",
+        10,
+    )
+    monkeypatch.setattr(
+        usage_tracker,
+        "total_completion_tokens",
+        5,
+    )
+    monkeypatch.setattr(
+        usage_tracker,
+        "total_tokens",
+        15,
+    )
+    monkeypatch.setattr(
+        usage_tracker,
+        "lifetime_usage",
+        {
+            "total_prompt_tokens": 100,
+            "total_completion_tokens": 50,
+            "total_tokens": 150,
+        },
+    )
+
+    usage_tracker.print_usage_summary()
+
+    captured = capsys.readouterr()
+
+    assert "10" in captured.out
+    assert "5" in captured.out
+    assert "15" in captured.out
+    assert "100" in captured.out
+    assert "50" in captured.out
+    assert "150" in captured.out
+    assert str(usage_tracker.USAGE_FILE) in captured.out

@@ -27,3 +27,19 @@ def test_validate_config_missing_api_key(monkeypatch):
 
     with pytest.raises(ValueError, match="SILICONFLOW_API_KEY"):
         config.validate_config()
+
+
+def test_validate_config_missing_multiple_values(monkeypatch):
+    monkeypatch.setattr(config, "API_KEY", None)
+    monkeypatch.setattr(config, "BASE_URL", None)
+    monkeypatch.setattr(config, "MODEL", None)
+
+    with pytest.raises(ValueError) as exc_info:
+        config.validate_config()
+
+    message = str(exc_info.value)
+
+    assert "SILICONFLOW_API_KEY" in message
+    assert "SILICONFLOW_BASE_URL" in message
+    assert "SILICONFLOW_MODEL" in message
+

@@ -174,3 +174,58 @@ def test_main_handles_keyboard_interrupt(monkeypatch, capsys):
     assert "KeyboardInterrupt" not in captured.out
     assert summary_called == [True]
     assert "AI" in captured.out
+
+
+def test_main_handles_eof_error(monkeypatch, capsys):
+    import main
+
+    def raise_eof_error(prompt=""):
+        raise EOFError
+
+    monkeypatch.setattr(
+        "builtins.input",
+        raise_eof_error,
+    )
+
+    summary_called = []
+    monkeypatch.setattr(
+        main.usage_tracker,
+        "print_usage_summary",
+        lambda: summary_called.append(True),
+    )
+
+    main.main()
+
+    captured = capsys.readouterr()
+
+    assert "收到退出信号" in captured.out
+    assert summary_called == [True]
+
+
+def test_main_processes_valid_question(monkeypatch, capsys):
+    import main
+
+    inputs = iter(["什么是 Python？", "exit"])
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda prompt="": next(inputs),
+    )
+
+    asked_questions = []
+    monkeypatch.setattr(
+        main,
+        "ask_ai",
+        lambda question: asked_questions.append(question),
+    )
+    monkeypatch.setattr(
+        main.usage_tracker,
+        "print_usage_summary",
+        lambda: None,
+    )
+
+    main.main()
+
+    captured = capsys.readouterr()
+
+    assert asked_questions == ["什么是 Python？"]
+    assert "AI" in captured.out
