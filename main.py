@@ -2,6 +2,7 @@
 import llm_client
 import usage_tracker
 
+import logger as logging_config
 
 SYSTEM_PROMPT = """
 你是一位耐心、严谨的 Python 编程老师。
@@ -64,6 +65,8 @@ def ask_ai(question):
 
 
 def main():
+    logging_config.setup_logging()
+
     print("AI 编程助手已启动！")
     print("输入 exit、quit 或 退出即可结束程序。")
 

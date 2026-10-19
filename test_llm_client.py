@@ -2,6 +2,8 @@
 import llm_client
 from types import SimpleNamespace
 
+import logging
+
 def manual_test():
     """手动调用真实 API，检查模型是否能正常回答。"""
     messages = [
@@ -26,6 +28,7 @@ def manual_test():
 def test_stream_answer_returns_none_when_api_fails(
     monkeypatch,
     capsys,
+    caplog,
 ):
     """模拟 API 调用失败，验证异常处理逻辑。"""
 
@@ -56,10 +59,10 @@ def test_stream_answer_returns_none_when_api_fails(
     captured = capsys.readouterr()
     assert "模型调用失败" in captured.out
     assert "模拟 API 故障" in captured.out
+    assert "模型调用失败" in caplog.text
 
 
-
-def test_stream_answer_joins_stream_chunks(monkeypatch, capsys):
+def test_stream_answer_joins_stream_chunks(monkeypatch, capsys, caplog):
     chunks = [
         SimpleNamespace(
             choices=[
@@ -100,9 +103,13 @@ def test_stream_answer_joins_stream_chunks(monkeypatch, capsys):
         {"role": "user", "content": "打个招呼"},
     ]
 
+    caplog.set_level(logging.INFO, logger="llm_client")
+
     answer = llm_client.stream_answer(messages)
 
     assert answer == "你好，世界！"
+    assert "开始调用模型" in caplog.text
+
     capsys.readouterr()
 
 
@@ -160,7 +167,7 @@ def test_stream_answer_records_token_usage(monkeypatch, capsys):
     capsys.readouterr()
 
 
-def test_stream_answer_without_usage(monkeypatch, capsys):
+def test_stream_answer_without_usage(monkeypatch, capsys, caplog):
     chunks = [
         SimpleNamespace(
             choices=[
@@ -188,6 +195,7 @@ def test_stream_answer_without_usage(monkeypatch, capsys):
         "record_usage",
         unexpected_record_usage,
     )
+    caplog.set_level(logging.WARNING, logger="llm_client")
 
     answer = llm_client.stream_answer(
         [{"role": "user", "content": "测试缺失用量"}]
@@ -197,3 +205,4 @@ def test_stream_answer_without_usage(monkeypatch, capsys):
 
     assert answer == "正常回答"
     assert "本次请求没有返回 Token 用量统计" in captured.out
+    assert "本次请求没有返回 Token 用量统计" in caplog.text
