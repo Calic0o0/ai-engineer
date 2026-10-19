@@ -4,3 +4,4 @@ __pycache__/
 .env
 token_usage.json
 .vscode/
+.coverage
