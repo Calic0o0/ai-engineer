@@ -49,12 +49,18 @@ def ask_ai(question):
         "content": question,
     })
 
-    answer = llm_client.stream_answer(messages)
+    result = llm_client.stream_answer(messages)
 
-    if answer is None or not answer.strip():
-        # 请求失败时，不保留没有得到回答的问题
+    if (
+        not result.success
+        or not result.answer
+        or not result.answer.strip()
+    ):
+        # 请求失败或没有有效回答时，不保留没有得到回答的问题
         messages.pop()
         return
+
+    answer = result.answer
 
     messages.append({
         "role": "assistant",

@@ -1,6 +1,6 @@
 
 import main
-
+from llm_result import LLMResult
 
 def test_trim_history_keeps_system_prompt():
     main.messages[:] = [
@@ -60,7 +60,7 @@ def test_ask_ai_removes_question_when_answer_is_empty(monkeypatch):
     ]
 
     def fake_stream_answer(messages):
-        return ""
+        return LLMResult(success=True, answer="")
 
     monkeypatch.setattr(
         main.llm_client,
@@ -74,13 +74,39 @@ def test_ask_ai_removes_question_when_answer_is_empty(monkeypatch):
     assert main.messages[0]["role"] == "system"
 
 
+def test_ask_ai_removes_question_when_request_fails(monkeypatch):
+    main.messages[:] = [
+        {"role": "system", "content": "系统提示词"},
+    ]
+
+    def fake_stream_answer(messages):
+        return LLMResult(
+            success=False,
+            error="timeout",
+        )
+
+    monkeypatch.setattr(
+        main.llm_client,
+        "stream_answer",
+        fake_stream_answer,
+    )
+
+    main.ask_ai("测试超时问题")
+
+    assert len(main.messages) == 1
+    assert main.messages[0]["role"] == "system"
+
+    
 def test_ask_ai_saves_question_and_answer(monkeypatch):
     main.messages[:] = [
         {"role": "system", "content": "系统提示词"},
     ]
 
     def fake_stream_answer(messages):
-        return "这是模拟的 AI 回答"
+        return LLMResult(
+            success=True,
+            answer="这是模拟的 AI 回答",
+        )
 
     monkeypatch.setattr(
         main.llm_client,

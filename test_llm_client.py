@@ -1,5 +1,6 @@
 
 import llm_client
+from llm_result import LLMResult
 from types import SimpleNamespace
 
 import logging
@@ -62,7 +63,10 @@ def test_stream_answer_returns_none_when_api_fails(
 
     answer = llm_client.stream_answer(messages)
 
-    assert answer is None
+    assert isinstance(answer, LLMResult)
+    assert answer.success is False
+    assert answer.answer is None
+    assert answer.error == "unknown"
 
     captured = capsys.readouterr()
     assert "模型调用失败" in captured.out
@@ -92,7 +96,10 @@ def test_stream_answer_handles_timeout(monkeypatch, capsys, caplog):
 
     captured = capsys.readouterr()
 
-    assert answer is None
+    assert isinstance(answer, LLMResult)
+    assert answer.success is False
+    assert answer.error == "timeout"
+
     assert "模型请求超时" in captured.out
     assert "模型请求超时" in caplog.text
 
@@ -123,7 +130,9 @@ def test_stream_answer_handles_connection_error(
 
     captured = capsys.readouterr()
 
-    assert answer is None
+    assert isinstance(answer, LLMResult)
+    assert answer.success is False
+    assert answer.error == "connection"
     assert "模型网络连接失败" in captured.out
     assert "模型网络连接失败" in caplog.text
 
@@ -159,7 +168,9 @@ def test_stream_answer_handles_authentication_error(
 
     captured = capsys.readouterr()
 
-    assert answer is None
+    assert isinstance(answer, LLMResult)
+    assert answer.success is False
+    assert answer.error == "authentication"
     assert "API 认证失败" in captured.out
     assert "API 认证失败" in caplog.text
 
@@ -195,7 +206,9 @@ def test_stream_answer_handles_rate_limit_error(
 
     captured = capsys.readouterr()
 
-    assert answer is None
+    assert isinstance(answer, LLMResult)
+    assert answer.success is False
+    assert answer.error == "rate_limit"
     assert "API 请求频率或额度限制" in captured.out
     assert "API 请求频率或额度限制" in caplog.text
 
@@ -231,7 +244,9 @@ def test_stream_answer_handles_internal_server_error(
 
     captured = capsys.readouterr()
 
-    assert answer is None
+    assert isinstance(answer, LLMResult)
+    assert answer.success is False
+    assert answer.error == "server_error"
     assert "API 服务端发生错误" in captured.out
     assert "API 服务端发生错误" in caplog.text
 
@@ -280,9 +295,41 @@ def test_stream_answer_joins_stream_chunks(monkeypatch, capsys, caplog):
 
     answer = llm_client.stream_answer(messages)
 
-    assert answer == "你好，世界！"
+    assert isinstance(answer, LLMResult)
+    assert answer.success is True
+    assert answer.answer == "你好，世界！"
+
     assert "开始调用模型" in caplog.text
 
+    capsys.readouterr()
+
+def test_stream_answer_returns_empty_string_when_no_content(
+    monkeypatch, capsys
+):
+    """模型请求成功但没有文本内容时，返回空字符串。"""
+    chunks = [
+        SimpleNamespace(
+            choices=[],
+            usage=None,
+        )
+    ]
+
+    def fake_create(**kwargs):
+        return iter(chunks)
+
+    monkeypatch.setattr(
+        llm_client.client.chat.completions,
+        "create",
+        fake_create,
+    )
+
+    answer = llm_client.stream_answer(
+        [{"role": "user", "content": "测试空回答"}]
+    )
+
+    assert isinstance(answer, LLMResult)
+    assert answer.success is True
+    assert answer.answer == ""
     capsys.readouterr()
 
 def test_stream_answer_records_token_usage(monkeypatch, capsys):
@@ -330,7 +377,10 @@ def test_stream_answer_records_token_usage(monkeypatch, capsys):
         [{"role": "user", "content": "测试 Token 记录"}]
     )
 
-    assert answer == "测试回答"
+    assert isinstance(answer, LLMResult)
+    assert answer.success is True
+    assert answer.answer == "测试回答"
+    
     assert recorded_usages == [usage]
     capsys.readouterr()
 
@@ -370,7 +420,10 @@ def test_stream_answer_without_usage(monkeypatch, capsys, caplog):
 
     captured = capsys.readouterr()
 
-    assert answer == "正常回答"
+    assert isinstance(answer, LLMResult)
+    assert answer.success is True
+    assert answer.answer == "正常回答"
+
     assert "本次请求没有返回 Token 用量统计" in captured.out
     assert "本次请求没有返回 Token 用量统计" in caplog.text
 

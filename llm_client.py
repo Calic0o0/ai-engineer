@@ -10,7 +10,7 @@ from openai import (
 
 import config
 import usage_tracker
-
+from llm_result import LLMResult
 import logging
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ client = OpenAI(
 
 
 def stream_answer(messages):
-    """发送对话请求，流式输出回答并返回完整文本。"""
+    """发送对话请求，流式输出回答并返回结构化结果。"""
     answer_parts = []
     usage = None
 
@@ -55,6 +55,7 @@ def stream_answer(messages):
                 answer_parts.append(content)
 
         print()
+        answer = "".join(answer_parts)
 
         if usage is not None:
             usage_tracker.record_usage(usage)
@@ -62,35 +63,37 @@ def stream_answer(messages):
             logger.warning("本次请求没有返回 Token 用量统计")
             print("本次请求没有返回 Token 用量统计。")
 
-        return "".join(answer_parts)
+        return LLMResult(
+            success=True,
+            answer=answer,
+        )
 
     except APITimeoutError as error:
         logger.exception("模型请求超时")
         print(f"\n模型请求超时：{error}")
-        return None
+        return LLMResult(success=False, error="timeout")
 
     except AuthenticationError as error:
         logger.exception("API 认证失败，请检查 API Key")
         print(f"\nAPI 认证失败，请检查 API Key：{error}")
-        return None
+        return LLMResult(success=False, error="authentication")
 
     except APIConnectionError as error:
         logger.exception("模型网络连接失败")
         print(f"\n模型网络连接失败：{error}")
-        return None
+        return LLMResult(success=False, error="connection")
 
     except RateLimitError as error:
         logger.exception("API 请求频率或额度限制")
         print(f"\nAPI 请求频率或额度限制：{error}")
-        return None
+        return LLMResult(success=False, error="rate_limit")
 
     except InternalServerError as error:
         logger.exception("API 服务端发生错误")
         print(f"\nAPI 服务端发生错误：{error}")
-        return None
+        return LLMResult(success=False, error="server_error")
 
     except Exception as error:
         logger.exception("模型调用失败")
         print(f"\n模型调用失败：{error}")
-        return None
-    
+        return LLMResult(success=False, error="unknown")
