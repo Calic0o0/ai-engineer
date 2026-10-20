@@ -20,7 +20,7 @@ config.validate_config()
 client = OpenAI(
     api_key=config.API_KEY,
     base_url=config.BASE_URL,
-    timeout=30.0,
+    timeout=120.0,
     max_retries=1,
 )
 
