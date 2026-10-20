@@ -7,6 +7,49 @@ import pytest
 client = TestClient(app)
 
 
+def test_request_id_header():
+    response = client.get("/health")
+
+    request_id = response.headers.get("X-Request-ID")
+
+    assert response.status_code == 200
+    assert request_id is not None
+    assert len(request_id) == 36
+
+
+def test_request_ids_are_unique():
+    first_response = client.get("/health")
+    second_response = client.get("/health")
+
+    first_request_id = first_response.headers["X-Request-ID"]
+    second_request_id = second_response.headers["X-Request-ID"]
+
+    assert first_request_id != second_request_id
+
+
+def test_request_logging(caplog):
+    with caplog.at_level("INFO", logger="api"):
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert "request_completed" in caplog.text
+    assert "request_id=" in caplog.text
+    assert "method=GET" in caplog.text
+    assert "path=/health" in caplog.text
+    assert "status_code=200" in caplog.text
+    assert "duration_ms=" in caplog.text
+
+
+def test_request_logging_for_404(caplog):
+    with caplog.at_level("INFO", logger="api"):
+        response = client.get("/not-found")
+
+    assert response.status_code == 404
+    assert "request_completed" in caplog.text
+    assert "path=/not-found" in caplog.text
+    assert "status_code=404" in caplog.text
+
+
 def test_health_check():
     response = client.get("/health")
 
