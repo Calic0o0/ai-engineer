@@ -14,6 +14,26 @@ app = FastAPI(
 )
 
 
+ERROR_STATUS_CODES = {
+    "timeout": 504,
+    "connection": 503,
+    "rate_limit": 429,
+    "authentication": 502,
+    "server_error": 502,
+    "unknown": 502,
+    "invalid_request": 422,
+}
+
+ERROR_MESSAGES = {
+    "timeout": "模型服务响应超时，请稍后重试",
+    "connection": "暂时无法连接模型服务，请稍后重试",
+    "rate_limit": "模型服务请求过于频繁，请稍后重试",
+    "authentication": "模型服务认证失败，请联系管理员",
+    "server_error": "模型服务暂时不可用，请稍后重试",
+    "unknown": "模型请求失败，请稍后重试",
+    "invalid_request": "请求参数无效，请检查输入内容",
+}
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(
     request: Request,
@@ -31,9 +51,13 @@ async def http_exception_handler(
         content={
             "success": False,
             "error": error_code,
+            "message": ERROR_MESSAGES.get(
+                error_code,
+                "请求处理失败，请稍后重试",
+            ),
         },
         headers=exc.headers,
-    )
+)
 
 
 @app.exception_handler(RequestValidationError)
@@ -46,6 +70,7 @@ async def validation_exception_handler(
         content={
             "success": False,
             "error": "invalid_request",
+            "message": ERROR_MESSAGES["invalid_request"],
         },
     )
 
@@ -96,14 +121,7 @@ def chat(request: ChatRequest):
     result = llm_client.stream_answer(messages)
 
     if not result.success:
-        status_code = {
-            "timeout": 504,
-            "connection": 503,
-            "rate_limit": 429,
-            "authentication": 502,
-            "server_error": 502,
-            "unknown": 502,
-        }.get(result.error, 502)
+        status_code = ERROR_STATUS_CODES.get(result.error, 502)
 
         raise HTTPException(
             status_code=status_code,
