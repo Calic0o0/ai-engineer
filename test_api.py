@@ -66,10 +66,8 @@ def test_chat_failure(monkeypatch):
 
     assert response.status_code == 504
     assert response.json() == {
-        "detail": {
             "success": False,
             "error": "timeout",
-        }
     }
 
 
@@ -80,6 +78,10 @@ def test_chat_rejects_empty_message():
     )
 
     assert response.status_code == 422
+    assert response.json() == {
+        "success": False,
+        "error": "invalid_request",
+    }
 
 
 def test_chat_rejects_message_over_4000_characters():
@@ -89,6 +91,10 @@ def test_chat_rejects_message_over_4000_characters():
     )
 
     assert response.status_code == 422
+    assert response.json() == {
+        "success": False,
+        "error": "invalid_request",
+    }
 
 
 def test_chat_rejects_whitespace_only_message():
@@ -98,6 +104,10 @@ def test_chat_rejects_whitespace_only_message():
     )
 
     assert response.status_code == 422
+    assert response.json() == {
+        "success": False,
+        "error": "invalid_request",
+    }
 
 
 
@@ -133,4 +143,4 @@ def test_chat_failure_status_codes(
     )
 
     assert response.status_code == expected_status
-    assert response.json()["detail"]["error"] == error
+    assert response.json()["error"] == error
