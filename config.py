@@ -1,5 +1,4 @@
-
-import os
+﻿import os
 from dotenv import load_dotenv
 
 # 加载项目中的 .env 文件
@@ -9,6 +8,13 @@ load_dotenv()
 API_KEY = os.getenv("SILICONFLOW_API_KEY")
 BASE_URL = os.getenv("SILICONFLOW_BASE_URL")
 MODEL = os.getenv("SILICONFLOW_MODEL")
+
+# 读取 MySQL 数据库配置
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = int(os.getenv("DB_PORT", "3306"))
+DB_NAME = os.getenv("DB_NAME", "ai_engineer")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 
 def validate_config():
