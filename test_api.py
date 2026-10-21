@@ -219,7 +219,6 @@ def test_error_messages_mapping():
     }
 
 
-
 def test_unexpected_exception_does_not_leak_details(monkeypatch):
     secret_detail = "SECRET_INTERNAL_DETAIL"
 
@@ -240,3 +239,71 @@ def test_unexpected_exception_does_not_leak_details(monkeypatch):
     assert response.status_code == 500
     assert secret_detail not in response.text
     assert "Traceback" not in response.text
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"message": 123},
+        {"message": None},
+        {"message": ["你好"]},
+    ],
+)
+def test_chat_rejects_missing_or_invalid_message(payload):
+    response = client.post("/chat", json=payload)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "success": False,
+        "error": "invalid_request",
+        "message": "请求参数无效，请检查输入内容",
+    }
+
+
+def test_chat_accepts_message_with_exactly_4000_characters(monkeypatch):
+    message = "a" * 4000
+
+    def fake_stream_answer(messages):
+        assert messages == [
+            {
+                "role": "user",
+                "content": message,
+            }
+        ]
+        return LLMResult(
+            success=True,
+            answer="测试回答",
+        )
+
+    monkeypatch.setattr(
+        "api.llm_client.stream_answer",
+        fake_stream_answer,
+    )
+
+    response = client.post(
+        "/chat",
+        json={"message": message},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "answer": "测试回答",
+    }
+
+
+def test_chat_rejects_malformed_json():
+    response = client.post(
+        "/chat",
+        content="{invalid json",
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "success": False,
+        "error": "invalid_request",
+        "message": "请求参数无效，请检查输入内容",
+    }
+
