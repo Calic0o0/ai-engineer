@@ -4,8 +4,39 @@
     container_name: ai-engineer-api
     env_file:
       - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ai_engineer
+      DB_USER: ai_engineer
     ports:
       - "8000:8000"
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       - ./data:/app/data
+
+  db:
+    image: mysql:8.4
+    container_name: ai-engineer-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ai_engineer
+      MYSQL_USER: ai_engineer
+      MYSQL_PASSWORD: ${DB_PASSWORD:?请在.env中设置DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?请在.env中设置DB_PASSWORD}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  mysql_data:
