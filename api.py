@@ -11,7 +11,7 @@ import uuid
 import llm_client
 from llm_result import LLMResult
 from logger import setup_logging
-
+from session_manager import SessionManager
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -22,6 +22,9 @@ app = FastAPI(
     description="我的 AI 后端服务",
     version="0.1.0",
 )
+
+
+session_manager = SessionManager()
 
 
 @app.middleware("http")
@@ -146,12 +149,27 @@ class ChatRequest(BaseModel):
         min_length=1,
         max_length=4000,
     )
+    session_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+    )
 
     @field_validator("message")
     @classmethod
     def message_must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("message 不能为空或只包含空格")
+        return value
+
+    @field_validator("session_id")
+    @classmethod
+    def session_id_must_not_be_blank(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("session_id 不能为空或只包含空格")
         return value
 
 
@@ -174,15 +192,25 @@ def health_check():
     }
 
 
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
-    """接收用户问题并返回大模型回答。"""
-    messages = [
-        {
+    """接收用户问题，并按需维护多轮对话历史。"""
+    session_id = request.session_id
+
+    if session_id is None:
+        messages = [
+            {
+                "role": "user",
+                "content": request.message,
+            }
+        ]
+    else:
+        messages = session_manager.get_messages(session_id)
+        messages.append({
             "role": "user",
             "content": request.message,
-        }
-    ]
+        })
 
     result = llm_client.stream_answer(messages)
 
@@ -197,7 +225,31 @@ def chat(request: ChatRequest):
             },
         )
 
+    answer = result.answer
+
+    if not answer or not answer.strip():
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "success": False,
+                "error": "unknown",
+            },
+        )
+
+    if session_id is not None:
+        session_manager.add_message(
+            session_id,
+            "user",
+            request.message,
+        )
+        session_manager.add_message(
+            session_id,
+            "assistant",
+            answer,
+        )
+        session_manager.trim_history(session_id)
+
     return {
         "success": True,
-        "answer": result.answer,
+        "answer": answer,
     }

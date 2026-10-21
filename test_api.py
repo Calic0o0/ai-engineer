@@ -307,3 +307,147 @@ def test_chat_rejects_malformed_json():
         "message": "请求参数无效，请检查输入内容",
     }
 
+
+def test_chat_continues_existing_session(monkeypatch):
+    from api import session_manager
+
+    session_id = "test-continuation"
+    session_manager._sessions.pop(session_id, None)
+    received_messages = []
+
+    def fake_stream_answer(messages):
+        received_messages.append([message.copy() for message in messages])
+        return LLMResult(
+            success=True,
+            answer=f"回答 {len(received_messages)}",
+        )
+
+    monkeypatch.setattr(
+        "api.llm_client.stream_answer",
+        fake_stream_answer,
+    )
+
+    first_response = client.post(
+        "/chat",
+        json={
+            "session_id": session_id,
+            "message": "什么是 Python 列表？",
+        },
+    )
+    second_response = client.post(
+        "/chat",
+        json={
+            "session_id": session_id,
+            "message": "请给我一个例子",
+        },
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+
+    assert received_messages[1] == [
+        received_messages[0][0],
+        {
+            "role": "user",
+            "content": "什么是 Python 列表？",
+        },
+        {
+            "role": "assistant",
+            "content": "回答 1",
+        },
+        {
+            "role": "user",
+            "content": "请给我一个例子",
+        },
+    ]
+
+
+def test_chat_sessions_are_isolated(monkeypatch):
+    from api import session_manager
+
+    session_manager._sessions.pop("test-session-a", None)
+    session_manager._sessions.pop("test-session-b", None)
+    received_messages = []
+
+    def fake_stream_answer(messages):
+        received_messages.append([message.copy() for message in messages])
+        return LLMResult(success=True, answer="模拟回答")
+
+    monkeypatch.setattr(
+        "api.llm_client.stream_answer",
+        fake_stream_answer,
+    )
+
+    client.post(
+        "/chat",
+        json={"session_id": "test-session-a", "message": "A 的问题"},
+    )
+    client.post(
+        "/chat",
+        json={"session_id": "test-session-b", "message": "B 的问题"},
+    )
+
+    assert received_messages[0][-1]["content"] == "A 的问题"
+    assert len(received_messages[0]) == 2
+    assert received_messages[1][-1]["content"] == "B 的问题"
+    assert len(received_messages[1]) == 2
+
+
+def test_chat_failure_does_not_save_session_turn(monkeypatch):
+    from api import session_manager
+
+    session_id = "test-failed-session"
+    session_manager._sessions.pop(session_id, None)
+
+    def fake_stream_answer(messages):
+        return LLMResult(success=False, error="timeout")
+
+    monkeypatch.setattr(
+        "api.llm_client.stream_answer",
+        fake_stream_answer,
+    )
+
+    response = client.post(
+        "/chat",
+        json={"session_id": session_id, "message": "失败的问题"},
+    )
+
+    assert response.status_code == 504
+    assert session_manager.get_messages(session_id) == [
+        {
+            "role": "system",
+            "content": session_manager.get_messages(session_id)[0]["content"],
+        }
+    ]
+
+
+def test_chat_rejects_blank_session_id():
+    response = client.post(
+        "/chat",
+        json={"session_id": "   ", "message": "你好"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "invalid_request"
+
+
+def test_chat_without_session_id_remains_stateless(monkeypatch):
+    received_messages = []
+
+    def fake_stream_answer(messages):
+        received_messages.append([message.copy() for message in messages])
+        return LLMResult(success=True, answer="模拟回答")
+
+    monkeypatch.setattr(
+        "api.llm_client.stream_answer",
+        fake_stream_answer,
+    )
+
+    for message in ("第一个问题", "第二个问题"):
+        response = client.post("/chat", json={"message": message})
+        assert response.status_code == 200
+
+    assert received_messages == [
+        [{"role": "user", "content": "第一个问题"}],
+        [{"role": "user", "content": "第二个问题"}],
+    ]
