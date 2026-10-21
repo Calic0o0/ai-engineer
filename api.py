@@ -118,6 +118,29 @@ async def validation_exception_handler(
     )
 
 
+@app.exception_handler(Exception)
+async def unexpected_exception_handler(
+    request: Request,
+    exc: Exception,
+):
+    logger.error(
+        "unexpected_error | request_id=%s | method=%s | path=%s | error_type=%s",
+        getattr(request.state, "request_id", "unknown"),
+        request.method,
+        request.url.path,
+        type(exc).__name__,
+    )
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": "internal_server_error",
+            "message": "服务器内部错误，请稍后重试",
+        },
+    )
+
+
 class ChatRequest(BaseModel):
     message: str = Field(
         min_length=1,

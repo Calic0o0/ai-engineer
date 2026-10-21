@@ -217,3 +217,26 @@ def test_error_messages_mapping():
         "unknown": "模型请求失败，请稍后重试",
         "invalid_request": "请求参数无效，请检查输入内容",
     }
+
+
+
+def test_unexpected_exception_does_not_leak_details(monkeypatch):
+    secret_detail = "SECRET_INTERNAL_DETAIL"
+
+    def fake_stream_answer(messages):
+        raise RuntimeError(secret_detail)
+
+    monkeypatch.setattr(
+        "api.llm_client.stream_answer",
+        fake_stream_answer,
+    )
+
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        response = test_client.post(
+            "/chat",
+            json={"message": "你好"},
+        )
+
+    assert response.status_code == 500
+    assert secret_detail not in response.text
+    assert "Traceback" not in response.text
