@@ -1,4 +1,7 @@
-﻿from sqlalchemy import URL, create_engine, text
+﻿from collections.abc import Iterator
+from contextlib import contextmanager
+from sqlalchemy import URL, create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 
 import config
 
@@ -17,6 +20,23 @@ engine = create_engine(
     database_url,
     pool_pre_ping=True,
 )
+
+
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    expire_on_commit=False,
+)
+
+
+@contextmanager
+def get_db_session() -> Iterator[Session]:
+    """创建数据库 Session，并在使用后关闭。"""
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
 
 
 def check_database_connection() -> bool:
