@@ -9,6 +9,16 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    env:
+      SILICONFLOW_API_KEY: test-api-key
+      SILICONFLOW_BASE_URL: https://api.siliconflow.cn/v1
+      SILICONFLOW_MODEL: test-model
+      DB_HOST: localhost
+      DB_PORT: "3306"
+      DB_NAME: ai_engineer
+      DB_USER: test_user
+      DB_PASSWORD: test_password
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
