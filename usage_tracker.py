@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 # 统计文件放在当前模块所在目录
-USAGE_FILE = Path(__file__).with_name("token_usage.json")
+USAGE_FILE = Path(__file__).with_name("data") / "token_usage.json"
 
 # 本次程序运行的统计
 total_prompt_tokens = 0
