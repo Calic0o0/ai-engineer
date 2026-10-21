@@ -103,6 +103,98 @@ def test_stream_answer_handles_timeout(monkeypatch, capsys, caplog):
     assert "模型请求超时" in captured.out
     assert "模型请求超时" in caplog.text
 
+def test_stream_answer_handles_timeout_during_stream(
+    monkeypatch,
+    capsys,
+    caplog,
+):
+    """模拟流式响应读取过程中发生超时。"""
+
+    class FakeStream:
+        def __iter__(self):
+            yield SimpleNamespace(
+                usage=None,
+                choices=[
+                    SimpleNamespace(
+                        delta=SimpleNamespace(content="部分回答"),
+                    )
+                ],
+            )
+            raise APITimeoutError(
+                request=httpx.Request(
+                    "POST",
+                    "https://api.siliconflow.cn/v1/chat/completions",
+                )
+            )
+
+    def fake_create(**kwargs):
+        return FakeStream()
+
+    monkeypatch.setattr(
+        llm_client.client.chat.completions,
+        "create",
+        fake_create,
+    )
+
+    answer = llm_client.stream_answer(
+        [{"role": "user", "content": "测试流式超时"}]
+    )
+
+    captured = capsys.readouterr()
+
+    assert isinstance(answer, LLMResult)
+    assert answer.success is False
+    assert answer.error == "timeout"
+    assert "部分回答" in captured.out
+    assert "模型请求超时" in captured.out
+    assert "模型请求超时" in caplog.text
+
+def test_stream_answer_handles_connection_error_during_stream(
+    monkeypatch,
+    capsys,
+    caplog,
+):
+    """模拟流式响应读取过程中发生网络连接错误。"""
+
+    class FakeStream:
+        def __iter__(self):
+            yield SimpleNamespace(
+                usage=None,
+                choices=[
+                    SimpleNamespace(
+                        delta=SimpleNamespace(content="部分回答"),
+                    )
+                ],
+            )
+            raise APIConnectionError(
+                request=httpx.Request(
+                    "POST",
+                    "https://api.siliconflow.cn/v1/chat/completions",
+                )
+            )
+
+    def fake_create(**kwargs):
+        return FakeStream()
+
+    monkeypatch.setattr(
+        llm_client.client.chat.completions,
+        "create",
+        fake_create,
+    )
+
+    answer = llm_client.stream_answer(
+        [{"role": "user", "content": "测试网络中断"}]
+    )
+
+    captured = capsys.readouterr()
+
+    assert isinstance(answer, LLMResult)
+    assert answer.success is False
+    assert answer.error == "connection"
+    assert "部分回答" in captured.out
+    assert "模型网络连接失败" in captured.out
+    assert "模型网络连接失败" in caplog.text
+
 def test_stream_answer_handles_connection_error(
     monkeypatch,
     capsys,
@@ -430,6 +522,10 @@ def test_stream_answer_without_usage(monkeypatch, capsys, caplog):
 def test_client_has_one_retry():
     """确认模型客户端最多额外重试一次。"""
     assert llm_client.client.max_retries == 1
+
+def test_client_has_120_second_timeout():
+    """确认模型客户端配置了 120 秒超时。"""
+    assert llm_client.client.timeout == 120.0
 
 def test_sdk_retries_rate_limit_once():
     """验证 SDK 遇到 HTTP 429 时只额外重试一次。"""
